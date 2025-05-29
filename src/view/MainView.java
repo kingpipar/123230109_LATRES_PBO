@@ -4,16 +4,13 @@ import controller.TransaksiController;
 import model.Transaksi;
 
 import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.awt.event.*;
-import java.sql.Date;
 import java.time.LocalDate;
 import java.util.List;
 
 public class MainView extends JFrame {
     private TransaksiController controller;
-    private DefaultTableModel tableModel;
+    private TabelTransaksi tableModel;
     private JTable table;
 
     private JTextField tfNamaPelanggan, tfNamaObat, tfHargaSatuan, tfJumlahBeli;
@@ -56,30 +53,25 @@ public class MainView extends JFrame {
         btnRefresh.addActionListener(e -> loadData());
         panelForm.add(btnRefresh);
 
-        tableModel = new DefaultTableModel(new String[]{"ID", "Pelanggan", "Obat", "Harga", "Jumlah", "Tanggal"}, 0);
-        table = new JTable(tableModel);
-        table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-
-        table.addMouseListener(new MouseAdapter() {
-            public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2 && table.getSelectedRow() != -1) {
-                    int row = table.getSelectedRow();
-                    double harga = Double.parseDouble(tableModel.getValueAt(row, 3).toString());
-                    int jumlah = Integer.parseInt(tableModel.getValueAt(row, 4).toString());
-                    double total = harga * jumlah;
-                    if (jumlah > 5) total *= 0.9;
-
-                    JOptionPane.showMessageDialog(null, "Total Bayar: Rp " + total);
-                }
-            }
-        });
+        table = new JTable();
 
         JButton btnHapus = new JButton("Hapus");
         btnHapus.addActionListener(e -> hapusTransaksi());
 
+        JButton btnEdit = new JButton("Edit");
+        btnEdit.addActionListener(e -> editTransaksi());
+
+        JButton btnTotalBayar = new JButton("Lihat Total Bayar");
+        btnTotalBayar.addActionListener(e -> lihatTotalBayar());
+
+        JPanel panelButton = new JPanel();
+        panelButton.add(btnHapus);
+        panelButton.add(btnEdit);
+        panelButton.add(btnTotalBayar);
+
         add(panelForm, BorderLayout.NORTH);
         add(new JScrollPane(table), BorderLayout.CENTER);
-        add(btnHapus, BorderLayout.SOUTH);
+        add(panelButton, BorderLayout.SOUTH);
     }
 
     private void tambahTransaksi() {
@@ -89,7 +81,7 @@ public class MainView extends JFrame {
             double hargaSatuan = Double.parseDouble(tfHargaSatuan.getText());
             int jumlahBeli = Integer.parseInt(tfJumlahBeli.getText());
 
-            Transaksi t = new Transaksi(namaPelanggan, namaObat, hargaSatuan, jumlahBeli, Date.valueOf(LocalDate.now()));
+            Transaksi t = new Transaksi(namaPelanggan, namaObat, hargaSatuan, jumlahBeli, java.sql.Date.valueOf(LocalDate.now()));
             controller.tambahTransaksi(t);
             loadData();
 
@@ -103,13 +95,9 @@ public class MainView extends JFrame {
     }
 
     private void loadData() {
-        tableModel.setRowCount(0);
         List<Transaksi> list = controller.getTransaksiHariIni();
-        for (Transaksi t : list) {
-            tableModel.addRow(new Object[]{
-                t.getId(), t.getNamaPelanggan(), t.getNamaObat(), t.getHargaSatuan(), t.getJumlahBeli(), t.getTanggalTransaksi()
-            });
-        }
+        tableModel = new TabelTransaksi(list);
+        table.setModel(tableModel);
     }
 
     private void hapusTransaksi() {
@@ -124,6 +112,69 @@ public class MainView extends JFrame {
         } else {
             JOptionPane.showMessageDialog(this, "Pilih transaksi yang ingin dihapus.");
         }
+    }
+
+    private void editTransaksi() {
+        int row = table.getSelectedRow();
+        if (row == -1) {
+            JOptionPane.showMessageDialog(this, "Pilih transaksi yang ingin diedit.");
+            return;
+        }
+
+        try {
+            Transaksi t = tableModel.getTransaksiAt(row);
+
+            String namaPelanggan = JOptionPane.showInputDialog(this, "Edit Nama Pelanggan:", t.getNamaPelanggan());
+            String namaObat = JOptionPane.showInputDialog(this, "Edit Nama Obat:", t.getNamaObat());
+            String hargaStr = JOptionPane.showInputDialog(this, "Edit Harga Satuan:", t.getHargaSatuan());
+            String jumlahStr = JOptionPane.showInputDialog(this, "Edit Jumlah Beli:", t.getJumlahBeli());
+
+            if (namaPelanggan == null || namaObat == null || hargaStr == null || jumlahStr == null) {
+                return; // User cancel
+            }
+
+            double hargaSatuan = Double.parseDouble(hargaStr);
+            int jumlahBeli = Integer.parseInt(jumlahStr);
+            java.sql.Date tanggal = java.sql.Date.valueOf(LocalDate.now());
+
+            Transaksi updated = new Transaksi(t.getId(), namaPelanggan, namaObat, hargaSatuan, jumlahBeli, tanggal);
+            controller.updateTransaksi(updated);
+            loadData();
+
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Input tidak valid!", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void lihatTotalBayar() {
+        int row = table.getSelectedRow();
+        if (row == -1) {
+            JOptionPane.showMessageDialog(this, "Pilih salah satu transaksi terlebih dahulu.");
+            return;
+        }
+
+        Transaksi t = tableModel.getTransaksiAt(row);
+
+        double harga = t.getHargaSatuan();
+        int jumlah = t.getJumlahBeli();
+        double total = harga * jumlah;
+        double diskon = 0;
+
+        if (jumlah > 5) {
+            diskon = total * 0.10;
+            total -= diskon;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Detail Pembayaran:\n");
+        sb.append("Harga satuan : Rp ").append((int) harga).append("\n");
+        sb.append("Jumlah beli  : ").append(jumlah).append("\n");
+        if (diskon > 0) {
+            sb.append("Diskon 10%   : Rp ").append((int) diskon).append("\n");
+        }
+        sb.append("Total bayar  : Rp ").append((int) total);
+
+        JOptionPane.showMessageDialog(this, sb.toString(), "Total Bayar", JOptionPane.INFORMATION_MESSAGE);
     }
 
     public static void main(String[] args) {
