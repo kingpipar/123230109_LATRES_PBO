@@ -9,8 +9,8 @@ public class Koneksi {
         if (conn == null) {
             try {
                 String url = "jdbc:mysql://localhost:3306/apotek";
-                String user = "root"; // Ganti sesuai user MySQL Anda
-                String pass = ""; // Ganti sesuai password MySQL Anda
+                String user = "root"; 
+                String pass = ""; 
 
                 conn = DriverManager.getConnection(url, user, pass);
             } catch (SQLException e) {
